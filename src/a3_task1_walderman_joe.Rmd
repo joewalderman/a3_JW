@@ -1,0 +1,62 @@
+---
+title: "a3_task1_walderman_joe"
+author: "Joe Walderman"
+date: "2/18/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(sf)
+library(tmap)
+library(janitor)
+library(stars)
+library(gstat)
+```
+
+## Read in Data
+
+```{r}
+spills <- read_sf(here( "Oil_Spill_Incident_Tracking"), layer = "Oil_Spill_Incident_Tracking_%5Bds394%5D") %>% 
+  clean_names()
+
+st_crs(spills)
+
+# Read in the CA county data (TIGER shapefile):
+ca_counties <- read_sf(here("ca_counties","CA_Counties_TIGER2016.shp")) %>% 
+  clean_names() %>% 
+  select(name, aland) %>% 
+  rename(county_name = name, land_area = aland)
+
+st_crs(ca_counties)
+
+ggplot() +
+  geom_sf(data = ca_counties) +
+  geom_sf(data = spills, size = 1, color = "purple")
+```
+
+```{r}
+tmap_mode(mode = "view")
+
+tm_shape(ca_counties) +
+  tm_fill("land_area") +
+  tm_shape(spills) +
+  tm_dots()
+```
+
+```{r}
+spills_counties <- ca_counties %>% 
+  st_join(spills)
+
+spills_counts <- spills_counties %>% 
+  count(county_name)
+
+ggplot(data = spills_counts) +
+  geom_sf(aes(fill = n), color = "white", size = 0.1) +
+  scale_fill_gradientn(colors = c("ivory3", "tomato3", "salmon4")) +
+  theme_minimal() 
+  labs(fill = "Number of Oil Spills")
+```
+
