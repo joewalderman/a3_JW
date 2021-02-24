@@ -1,0 +1,58 @@
+---
+title: "a3_task2_walderman_joe"
+author: "Joe Walderman"
+date: "2/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(raster) ### NOTE: attaching this BEFORE tidyverse
+library(tidyverse)
+library(janitor)
+library(here)
+library(sf)
+library(fasterize)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(reprex)
+```
+
+```{r}
+ceta_tifs <- list.files(path = here("ca_cetaceans", "ca_cetaceans"), pattern = ".tif", full.names = TRUE)
+
+ceta_stack <- raster::stack(ceta_tifs)
+
+ceta_stack
+
+plot(ceta_stack$Kogia_sima, col = hcl.colors(n = 70))
+
+convert_ceta <- function(x) {
+  if_else(x > 0.65, 1, 0)
+}
+
+ceta_occurance <- calc(ceta_stack, function(x){convert_ceta(x)})
+
+plot(ceta_occurance$layer.1)
+```
+
+```{r}
+ceta_total <- calc(ceta_occurance, sum)
+
+plot(ceta_total, col = hcl.colors(n = 100))
+
+ceta_df <- raster::rasterToPoints(ceta_total) %>% 
+  as.data.frame()
+
+ca_coast <- ne_coastline(scale = "medium", returnclass = "sf")
+
+plot(ca_coast)
+
+ggplot(data = ca_coast) +
+  geom_sf() +
+  coord_sf(xlim = c(-125, -113), ylim = c(28, 38), expand = FALSE) +
+  geom_raster(data = ceta_df, aes(x = x, y = y, fill = layer), alpha = .75)
+```
+
+

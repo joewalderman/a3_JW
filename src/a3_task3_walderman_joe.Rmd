@@ -1,0 +1,166 @@
+---
+title: "a3_task3_joe_walderman"
+author: "Joe Walderman"
+date: "2/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidytext)
+library(textdata)
+library(pdftools)
+library(ggwordcloud)
+library(reprex)
+library(here)
+library(jpeg)
+library(ggimage)
+library(png)
+library(ggpubr)
+```
+
+## Get Catch 22
+
+```{r, cache = TRUE}
+catch22 <- pdf_text(here("Catch-22.pdf"))
+```
+
+```{r}
+catch22_tidy <- data.frame(catch22) %>% 
+  mutate(text_full = str_split(catch22, pattern = "\\n")) %>% 
+  unnest(text_full) %>% #making each line its own observation
+  mutate(text_full = str_trim(text_full))
+
+catch22_df <- catch22_tidy %>% 
+  slice(-(1:54)) %>% #getting rid of preface and table of contents
+  mutate(chapter = case_when(
+    str_detect(text_full, pattern = "CHAPTER") ~ text_full,
+               TRUE ~ NA_character_
+  )) %>% 
+  fill(chapter) %>% 
+  separate(col = chapter, into = c("chap", "title"), sep = " - ", extra = "merge") %>% 
+  separate(col = chap, into = c("ch", "no"), sep = " ") %>% 
+  mutate(chapter = as.numeric(no))
+```
+
+## Word Counts by Chapter
+
+```{r}
+#getting tokens
+catch22_tokens <- catch22_df %>% 
+  unnest_tokens(word, text_full) %>% 
+  select(-catch22)
+
+#wordcount by chapter
+catch22_count <- catch22_tokens %>% 
+  count(chapter, word)
+
+#stopword removal
+catch22_nonstop <- catch22_tokens %>% 
+  anti_join(stop_words)
+
+#wordcount without stopwords
+nonstop_counts <- catch22_nonstop %>% 
+  count(chapter, word)
+```
+
+```{r}
+names <- c("yossarian", "yossarian's", "milo", "clevinger", "cathcart", "lieutenant", "captain", "colonel", "daneeka", "joe", "havermeyer", "cargill", "aarfy", "dreedle", "whitcomb", "danby", "scheisskopf", "nately", "orr", "peckem", "dunbar", "dreedle", "havermeyer", "mcwatt", "scheisskopf's", "corporal", "milo's", "korn", "korn's", "ferredge", "cramer", "cramer's", "ewing", "ewing's", "duckett", "pazzo", "snowden", "giuseppe", "sanderson", "moodus", "irving's", "dobbs", "sergeant", "coverley", "cathcart's", "aarfy's", "oran", "sampson", "fortiori", "wes", "danby's", "dreedle's", "whitcomb's", "colonel's", "appleby", "major", "lieutenant's", "nately's", "chaplain", "chaplain's", "washington", "metcalf", "metcalf's", "halfoat", "halfoat's")
+
+names_df <- as.data.frame(names) %>% 
+  rename(word = names)
+
+no_names <- catch22_nonstop %>% 
+  anti_join(names_df)
+
+counts_no_names <- no_names %>% 
+  count(chapter, word)
+```
+
+## 1) Top 5 words in *Catch-22* part 2
+
+```{r, fig.align="center"}
+#Find the top 5 words for part 2
+
+top5_part2 <- counts_no_names %>% 
+  filter(chapter %in% c(15:28)) %>% 
+  group_by(chapter) %>% 
+  arrange(-n) %>% 
+  slice(1:5)
+
+#Making a visualization
+ggplot(data = top5_part2, aes(x = word, y = n)) +
+  geom_col(fill = "maroon") +
+  facet_wrap(~chapter, scales = "free") +
+  coord_flip() +
+  theme_minimal() +
+  theme(text = element_text(size = 8),
+        plot.title = element_text(hjust = .6, size = 13)) +
+  labs(x = "Word",
+       y = "Count")
+```
+
+### 2) Top 50 Words in *Catch-22* Chapter 9: "Major Major Major Major"
+
+```{r}
+#Getting top 50 words from chapter 9
+ch9_top25 <- nonstop_counts %>% 
+  filter(chapter == 9) %>% 
+  arrange(-n) %>% 
+  slice(1:25)
+
+catch <- jpeg::readJPEG(here("catch-221.jpg"))
+
+ch9_cloud <- ggplot(data = ch9_top25, aes(label = word)) +
+  background_image(catch) +
+  geom_text_wordcloud(aes(color = n, size = n), shape = "triangle-forward") +
+  scale_color_gradientn(colors = c("orange", "orange2", "orangered2"))  +
+  scale_size_area(max_size = 35) +
+  theme_minimal()
+
+ch9_cloud
+```
+
+```{r}
+#Getting top 50 words from chapter 9
+ch9_tp50 <- nonstop_counts %>% 
+  filter(chapter == 9) %>% 
+  arrange(-n) %>% 
+  slice(1:50)
+
+catcha <- jpeg::readJPEG(here("catch-22-pic.jpg"))
+
+ch9s_cloud <- ggplot(data = ch9_top50, aes(label = word)) +
+  background_image(catcha) +
+  geom_text_wordcloud(aes(color = n, size = n), shape = "triangle-forward") +
+  scale_color_gradientn(colors = c("orange", "orange2", "orangered2"))  +
+  scale_size_area(max_size = 20) +
+  theme_minimal()
+
+ch9s_cloud
+```
+
+### 3) Sentiment Analysis of *Catch-22* using AFINN lexicon
+
+```{r}
+catch22_afinn <- catch22_nonstop %>% 
+  inner_join(get_sentiments("afinn"))
+
+afinn_counts <- catch22_afinn %>% 
+  count(chapter, value)
+
+afinn_means <- catch22_afinn %>% 
+  group_by(chapter) %>% 
+  summarize(mean_afinn = mean(value))
+
+ggplot(data = afinn_means,
+       aes(x = chapter, y = mean_afinn)) +
+  geom_col(fill = "goldenrod") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = "Chapter",
+       y = "Mean Sentiment")
+```
+
+
